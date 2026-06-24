@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Viewer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #0f0f0f;
+            color: white;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .viewer-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 15px 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .stream-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .stream-info {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .info-badge {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .live-badge {
+            background: #ef4444;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .video-container {
+            flex: 1 1 0;
+            /* min-height:0 lets this flex item shrink to the available space.
+               Without it, flex items default to min-height:auto and refuse to
+               shrink below the video's intrinsic size, so the player overflows
+               and the bottom of the frame gets clipped (hidden by the page's
+               overflow:hidden). overflow:hidden keeps any rounding contained. */
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: #000;
+        }
+        
+        #videoPlayer {
+            width: 100%;
+            height: 100%;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        
+        .loading-spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        .error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            padding: 30px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 2px solid #ef4444;
+            border-radius: 10px;
+            display: none;
+        }
+        
+        .error-message h2 {
+            margin-bottom: 10px;
+            color: #ef4444;
+        }
+        
+        .controls {
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 20px 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .control-buttons {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            border-color: #667eea;
+        }
+        
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+        
+        .btn-danger {
+            background: #ef4444;
+            border-color: #ef4444;
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .volume-slider {
+            width: 100px;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+        
+        .volume-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 20px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .fullscreen-btn {
+            margin-left: auto;
+        }
+        
+        @media (max-width: 768px) {
+            .header {
+                padding: 10px 15px;
+            }
+            
+            .stream-title {
+                font-size: 1.2rem;
+            }
+            
+            .stream-info {
+                gap: 10px;
+            }
+            
+            .controls {
+                padding: 15px;
+                flex-wrap: wrap;
+            }
+            
+            .stats {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+    <div class="viewer-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="stream-title" id="streamTitle">Loading Stream...</div>
+            <div class="stream-info">
+                <span class="live-badge">LIVE</span>
+                <span class="info-badge" id="viewerCount">0 viewers</span>
+                <span class="info-badge" id="streamQuality">--</span>
+            </div>
+        </div>
+        
+        <!-- Video Container -->
+        <div class="video-container">
+            <div class="loading-spinner" id="loadingSpinner"></div>
+            <video id="videoPlayer" controls></video>
+            <div class="error-message" id="errorMessage">
+                <h2>Stream Error</h2>
+                <p id="errorText">Unable to load stream</p>
+                <button class="btn btn-primary" onclick="retryStream()">Retry</button>
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="controls">
+            <div class="control-buttons">
+                <button class="btn" onclick="togglePlayPause()" id="playPauseBtn">Pause</button>
+                <button class="btn" onclick="toggleMute()" id="muteBtn">Mute</button>
+                <button class="btn btn-danger" onclick="stopViewing()">Exit Stream</button>
+
+            </div>
+            
+            <div class="volume-control">
+                <span>🔊</span>
+                <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50">
+            </div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <span>📊</span>
+                    <span id="bitrate">-- kbps</span>
+                </div>
+                <div class="stat-item">
+                    <span>⏱️</span>
+                    <span id="latency">-- ms</span>
+                </div>
+                <div class="stat-item">
+                    <span>📡</span>
+                    <span id="bufferSize">-- s</span>
+                </div>
+            </div>
+            
+            <button class="btn fullscreen-btn" onclick="toggleFullscreen()">🔳 Fullscreen</button>
+        </div>
+    </div>
+    
+    <script>
+        // Base URL of the Broadcasting Engine (Part 2), injected by the Flask
+        // viewer app. All API/HLS requests go cross-origin to the engine.
+        const ENGINE = "{{ engine_url }}";
+
+        // Get stream ID from URL
+        const pathParts = window.location.pathname.split('/');
+        const streamId = pathParts[pathParts.length - 1];
+        
+        const video = document.getElementById('videoPlayer');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorText = document.getElementById('errorText');
+        let hls = null;
+        let streamInfo = null;
+        let statsInterval = null;
+        
+        // Load stream info
+        async function loadStreamInfo() {
+            try {
+                const response = await fetch(`${ENGINE}/api/screen-stream/${streamId}`);
+                if (!response.ok) throw new Error('Stream not found');
+                
+                streamInfo = await response.json();
+                document.getElementById('streamTitle').textContent = streamInfo.name || 'Untitled Stream';
+                document.getElementById('streamQuality').textContent = `${streamInfo.width}x${streamInfo.height} @ ${streamInfo.fps}fps`;
+
+                // For finished recordings the broadcast is no longer live, so
+                // hide the pulsing LIVE badge.
+                if (streamInfo.status === 'ended') {
+                    const liveBadge = document.querySelector('.live-badge');
+                    if (liveBadge) liveBadge.style.display = 'none';
+                }
+
+                updateViewerCount();
+            } catch (error) {
+                console.error('Error loading stream info:', error);
+                document.getElementById('streamTitle').textContent = 'Stream Not Found';
+            }
+        }
+        
+        // Initialize HLS player
+        function initializePlayer() {
+            const streamUrl = `${ENGINE}/api/screen-stream/${streamId}/stream.m3u8`;
+            
+            if (Hls.isSupported()) {
+                hls = new Hls({
+                    enableWorker: true,
+                    // lowLatencyMode is for LL-HLS (which we don't produce) and
+                    // causes stutter on normal HLS, so keep it off for smoothness.
+                    lowLatencyMode: false,
+                    // Stay ~3 segments (~6s) behind live: enough buffer to ride out
+                    // network jitter without visible stalls.
+                    liveSyncDurationCount: 3,
+                    liveMaxLatencyDurationCount: 10,
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60,
+                    backBufferLength: 30,
+                    fragLoadingMaxRetry: 6,
+                    levelLoadingMaxRetry: 6,
+                    manifestLoadingMaxRetry: 6,
+                    startLevel: -1,
+                    autoStartLoad: true,
+                    debug: false
+                });
+
+                
+                hls.loadSource(streamUrl);
+                hls.attachMedia(video);
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    loadingSpinner.style.display = 'none';
+                    video.play().catch(e => {
+                        console.log('Autoplay blocked, user interaction required');
+                    });
+                    startStatsMonitoring();
+                });
+                
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    console.error('HLS Error:', data);
+                    if (data.fatal) {
+                        // Recover from transient network/media errors instead of
+                        // killing playback (keeps the stream smooth through hiccups).
+                        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                            hls.startLoad();
+                        } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                            hls.recoverMediaError();
+                        } else {
+                            handleStreamError(data.details);
+                        }
+                    }
+                });
+
+                
+                hls.on(Hls.Events.LEVEL_LOADED, (event, data) => {
+                    const bitrate = Math.round(data.stats.total * 8 / data.stats.loading.duration / 1000);
+                    document.getElementById('bitrate').textContent = bitrate + ' kbps';
+                });
+                
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                // Native HLS support (Safari)
+                video.src = streamUrl;
+                video.addEventListener('loadedmetadata', () => {
+                    loadingSpinner.style.display = 'none';
+                    video.play();
+                });
+                
+                video.addEventListener('error', (e) => {
+                    handleStreamError('Failed to load stream');
+                });
+            }
+        }
+        
+        // Handle stream errors
+        function handleStreamError(details) {
+            loadingSpinner.style.display = 'none';
+            errorMessage.style.display = 'block';
+            errorText.textContent = details || 'Unable to load stream. The stream may be offline.';
+        }
+        
+        // Retry stream
+        function retryStream() {
+            errorMessage.style.display = 'none';
+            loadingSpinner.style.display = 'block';
+            
+            if (hls) {
+                hls.destroy();
+            }
+            
+            setTimeout(() => {
+                initializePlayer();
+            }, 1000);
+        }
+        
+        // Monitor streaming stats
+        function startStatsMonitoring() {
+            statsInterval = setInterval(() => {
+                if (hls) {
+                    const latency = hls.latency;
+                    const buffer = video.buffered.length > 0 ? 
+                        (video.buffered.end(video.buffered.length - 1) - video.currentTime).toFixed(1) : '0';
+                    
+                    document.getElementById('latency').textContent = latency ? Math.round(latency * 1000) + ' ms' : '-- ms';
+                    document.getElementById('bufferSize').textContent = buffer + ' s';
+                }
+            }, 1000);
+        }
+        
+        // Update viewer count
+        function updateViewerCount() {
+            fetch(`${ENGINE}/api/screen-stream/${streamId}`)
+                .then(res => res.json())
+                .then(data => {
+                    const viewers = data.viewers || 0;
+                    document.getElementById('viewerCount').textContent = `${viewers} viewer${viewers !== 1 ? 's' : ''}`;
+                })
+                .catch(err => console.error('Error updating viewer count:', err));
+        }
+        
+        // Controls
+        function togglePlayPause() {
+            if (video.paused) {
+                video.play();
+                document.getElementById('playPauseBtn').textContent = 'Pause';
+            } else {
+                video.pause();
+                document.getElementById('playPauseBtn').textContent = 'Play';
+            }
+        }
+        
+        function toggleMute() {
+            video.muted = !video.muted;
+            document.getElementById('muteBtn').textContent = video.muted ? 'Unmute' : 'Mute';
+        }
+        
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        function stopViewing() {
+            if (hls) {
+                hls.destroy();
+            }
+            if (statsInterval) {
+                clearInterval(statsInterval);
+            }
+            window.location.href = '/';
+        }
+        
+        // Volume control
+        document.getElementById('volumeSlider').addEventListener('input', (e) => {
+            video.volume = e.target.value / 100;
+        });
+        
+        // Set initial volume
+        video.volume = 0.5;
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStreamInfo();
+            initializePlayer();
+            
+            // Update viewer count every 10 seconds
+            setInterval(updateViewerCount, 10000);
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (hls) {
+                hls.destroy();
+            }
+            if (statsInterval) {
+                clearInterval(statsInterval);
+            }
+        });
+    </script>
+</body>
+</html>

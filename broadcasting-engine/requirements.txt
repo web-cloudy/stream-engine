@@ -1,0 +1,9 @@
+# Broadcasting Engine (Part 2) dependencies
+flask==3.0.0
+flask-cors==4.0.0
+python-dotenv==1.0.0
+requests==2.31.0
+
+# Production WSGI servers (optional)
+gunicorn==21.2.0   ; sys_platform != "win32"
+waitress==3.0.0    ; sys_platform == "win32"

@@ -1,0 +1,8 @@
+# Screen Broadcast Client (Part 1) dependencies
+# Lower bounds (not exact pins) so the client installs cleanly across Python
+# versions, including newer ones that lack wheels for older releases.
+requests>=2.31.0
+Pillow>=10.0.0
+
+# Build tool (only needed to produce the standalone .exe)
+pyinstaller>=6.3.0
