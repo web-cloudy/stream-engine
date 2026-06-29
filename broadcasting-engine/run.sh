@@ -15,5 +15,9 @@ else
   VENV_PY=venv/bin/python
 fi
 
-echo "Starting Broadcasting Engine on http://0.0.0.0:5000  (Ctrl+C to stop)"
-"$VENV_PY" app.py
+echo "Starting Broadcasting Manager on http://0.0.0.0:5000  (Ctrl+C to stop)"
+echo "  (spawns one engine worker per stream; clients/viewers use this one address)"
+# manager.py is the gateway/bot: it launches one single_engine.py worker per
+# stream and proxies traffic to it. To run the old all-in-one engine instead,
+# use: "$VENV_PY" app.py
+"$VENV_PY" manager.py

@@ -4,7 +4,7 @@
 a = Analysis(
     ['screen_capture_client.py'],
     pathex=[],
-    binaries=[('D:\\mywo\\worldcup\\screen-broadcast-client\\ffmpeg\\ffmpeg.exe', 'ffmpeg')],
+    binaries=[('C:\\Users\\a\\Documents\\stream-engine\\screen-broadcast-client\\ffmpeg\\ffmpeg.exe', 'ffmpeg')],
     datas=[],
     hiddenimports=['PIL', 'PIL.ImageGrab', 'requests', 'tkinter'],
     hookspath=[],

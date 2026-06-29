@@ -1,9 +1,14 @@
 """
-Broadcasting Engine (Part 2) - pure API server.
+Broadcasting Engine (Part 2) - LEGACY all-in-one API server.
 
 Receives HLS segments pushed by the Screen Broadcast Client (Part 1), stores
 them per stream, serves them to viewers, and finalizes a replayable VOD
 recording when a broadcast ends.
+
+NOTE: The default entry point is now `manager.py` (the gateway/bot), which
+spawns one `single_engine.py` worker PER stream/folder and proxies to it. This
+file remains as a single-process fallback that handles all streams itself; it
+exposes the identical HTTP API, so clients/viewers don't care which one runs.
 
 The viewer web pages (Part 3) are a SEPARATE project (../web-viewer) that talks
 to this server's API over HTTP. CORS is enabled here so the viewer app may run
@@ -338,6 +343,10 @@ def create_app():
             info['viewers'] = 0
 
         resp = Response(playlist, mimetype='application/vnd.apple.mpegurl')
+        # The live playlist changes as the window advances -> a cache/CDN in
+        # front of this origin must always revalidate it. Segments (below) are
+        # the cacheable, immutable part.
+        resp.headers['Cache-Control'] = 'no-cache'
         if set_cookie:
             # 1-day cookie; SameSite=Lax is fine for same-origin player requests.
             resp.set_cookie('viewer_id', viewer_id, max_age=86400, samesite='Lax')
@@ -353,7 +362,13 @@ def create_app():
         if not os.path.exists(segment_path):
             return jsonify({'error': 'Segment not found'}), 404
 
-        return send_file(segment_path, mimetype='video/mp2t')
+        resp = send_file(segment_path, mimetype='video/mp2t')
+        # HLS segments are immutable once written. Marking them so lets a
+        # cache/CDN in front of the origin serve all edges from a single origin
+        # fetch instead of re-reading per edge -> caps origin egress.
+        if re.match(r'segment_\d+\.ts$', segment):
+            resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        return resp
 
     @app.route('/api/screen-stream/<stream_id>/download')
     def download_recording(stream_id):

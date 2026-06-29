@@ -141,13 +141,23 @@ def list_audio_devices():
     return devices
 
 
+def is_loopback_device(name):
+    """True if `name` looks like a system-audio (desktop sound) loopback device."""
+    low = (name or '').lower()
+    return any(h in low for h in LOOPBACK_HINTS)
+
+
+def find_loopback_device(devices):
+    """Return the first system-audio loopback device, or None if there is none."""
+    for d in devices:
+        if is_loopback_device(d):
+            return d
+    return None
+
+
 def pick_default_audio_device(devices):
     """Prefer a system-audio loopback device, else fall back to the first one."""
-    for d in devices:
-        low = d.lower()
-        if any(h in low for h in LOOPBACK_HINTS):
-            return d
-    return devices[0] if devices else ''
+    return find_loopback_device(devices) or (devices[0] if devices else '')
 
 
 # IMPORTANT: Do NOT make this process DPI-aware.
@@ -287,19 +297,20 @@ class BroadcastClient:
 
         aud = ttk.LabelFrame(self.root, text="Audio Source", padding=10)
         aud.pack(fill='x', padx=20, pady=8)
-        devices = list_audio_devices()
+        self.audio_devices = list_audio_devices()
         if not self.audio_device.get():
-            self.audio_device.set(pick_default_audio_device(devices) or NO_AUDIO_LABEL)
+            self.audio_device.set(pick_default_audio_device(self.audio_devices) or NO_AUDIO_LABEL)
         ttk.Combobox(aud, textvariable=self.audio_device,
-                     values=[NO_AUDIO_LABEL] + devices,
+                     values=[NO_AUDIO_LABEL] + self.audio_devices,
                      state='readonly', width=45).pack(pady=5)
-        if devices:
-            ttk.Label(aud, font=('Arial', 8), foreground='#555',
-                      text="A 'Microphone' captures mic input; 'Stereo Mix' / "
-                           "'virtual-audio-capturer' captures system sound.").pack()
-        else:
-            ttk.Label(aud, foreground='#a00',
-                      text="No audio devices detected - will broadcast video only.").pack()
+
+        # Live hint: tells the user exactly what the CURRENT selection will
+        # record, and warns when only a microphone is available (so they don't
+        # think a video's sound is being captured when it isn't).
+        self.audio_hint = ttk.Label(aud, font=('Arial', 8), wraplength=450, justify='left')
+        self.audio_hint.pack(fill='x', pady=(4, 0))
+        self.audio_device.trace_add('write', lambda *_: self._update_audio_hint())
+        self._update_audio_hint()
 
         bc = ttk.LabelFrame(self.root, text="Broadcast", padding=10)
         bc.pack(fill='x', padx=20, pady=8)
@@ -322,6 +333,38 @@ class BroadcastClient:
         sb = ttk.Scrollbar(st, command=self.status_text.yview)
         sb.pack(side='right', fill='y')
         self.status_text.config(yscrollcommand=sb.set)
+
+    def _update_audio_hint(self):
+        """Reflect what the current audio selection will actually capture."""
+        devices = getattr(self, 'audio_devices', [])
+        selected = self.audio_device.get()
+
+        if not devices:
+            self.audio_hint.config(
+                foreground='#a00',
+                text="No audio devices detected - will broadcast VIDEO ONLY.")
+        elif selected == NO_AUDIO_LABEL:
+            self.audio_hint.config(
+                foreground='#555',
+                text="Video only - no audio will be broadcast.")
+        elif is_loopback_device(selected):
+            self.audio_hint.config(
+                foreground='#0a7d00',
+                text="OK: capturing SYSTEM/DESKTOP audio - exactly what plays on "
+                     "the PC (e.g. a video's sound).")
+        else:
+            # A microphone is selected: the desktop/video sound is NOT captured.
+            if find_loopback_device(devices) is None:
+                tail = ("No system-audio (loopback) device found. To capture "
+                        "desktop/video sound, enable 'Stereo Mix' or install "
+                        "VB-Cable / virtual-audio-capturer.")
+            else:
+                tail = ("A loopback device is available - select it above to "
+                        "capture desktop/video sound instead.")
+            self.audio_hint.config(
+                foreground='#c25e00',
+                text="WARNING: MICROPHONE only - a video's sound is NOT captured "
+                     "cleanly. " + tail)
 
     # --------------------------------------------------------------- utils
     def log_status(self, message):
@@ -440,6 +483,10 @@ class BroadcastClient:
                 audio_in = ['-f', 'dshow', '-i', f'audio={chosen_audio}']
                 cmd_audio = base + audio_in + venc + ['-c:a', 'aac', '-b:a', '128k'] + hls
                 self.log_status(f"Starting broadcast (audio: {chosen_audio})...")
+                if not is_loopback_device(chosen_audio):
+                    self.log_status("NOTE: microphone source - a video's sound is NOT "
+                                    "captured cleanly (needs a Stereo Mix / VB-Cable "
+                                    "loopback device for desktop audio).")
                 self.ffmpeg_process = _spawn(cmd_audio)
                 # Give ffmpeg a moment; if it died (audio device busy/unavailable),
                 # retry video-only so the broadcast still goes out.

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(netstat -ano)",
+      "Bash(venv/Scripts/python.exe \"C:/Users/a/AppData/Local/Temp/claude/c--Users-a-Documents-stream-engine/2489af01-bf52-480b-9434-e666ba04322c/scratchpad/full_test.py\")",
+      "Bash(powershell.exe -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"Name='\\\\''python.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*single_engine.py*'\\\\'' } | Select-Object ProcessId, CommandLine | Format-List')"
+    ]
+  }
+}
