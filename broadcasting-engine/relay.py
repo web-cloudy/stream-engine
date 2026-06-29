@@ -159,22 +159,26 @@ def discovery_loop():
 
     print(f'[relay] origin={ORIGIN_URL}  edge={EDGE_URL}  interval={POLL_INTERVAL}s')
     while True:
-        live = {s['id']: s for s in _list_origin() if s.get('status') == 'streaming'}
+        try:
+            live = {s['id']: s for s in _list_origin() if s.get('status') == 'streaming'}
 
-        with _mirrors_lock:
-            # Start mirroring newly-seen live streams.
-            for sid, meta in live.items():
-                if sid not in _mirrors:
-                    stop = threading.Event()
-                    t = threading.Thread(target=_mirror_stream,
-                                         args=(sid, meta, stop), daemon=True)
-                    _mirrors[sid] = {'stop': stop, 'thread': t}
-                    t.start()
-            # Signal mirrors whose origin stream is no longer live to wrap up.
-            for sid in list(_mirrors):
-                if sid not in live:
-                    _mirrors[sid]['stop'].set()
-                    del _mirrors[sid]
+            with _mirrors_lock:
+                # Start mirroring newly-seen live streams.
+                for sid, meta in live.items():
+                    if sid not in _mirrors:
+                        stop = threading.Event()
+                        t = threading.Thread(target=_mirror_stream,
+                                             args=(sid, meta, stop), daemon=True)
+                        _mirrors[sid] = {'stop': stop, 'thread': t}
+                        t.start()
+                # Signal mirrors whose origin stream is no longer live to wrap up.
+                for sid in list(_mirrors):
+                    if sid not in live:
+                        _mirrors[sid]['stop'].set()
+                        del _mirrors[sid]
+        except Exception as e:
+            # Never let the discovery loop die -- it must keep the edge mirroring.
+            print(f'[relay] discovery error: {e}')
 
         time.sleep(POLL_INTERVAL)
 

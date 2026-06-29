@@ -102,16 +102,21 @@ def _wait_healthy(port, timeout=ENGINE_START_TIMEOUT):
 def _spawn_worker(stream_id, output_dir):
     """Start a single_engine.py worker for one stream and wait until it's up."""
     port = _free_port()
-    # sys.executable = the same (venv) Python running the manager.
-    proc = subprocess.Popen(
-        [sys.executable, SINGLE_ENGINE,
-         '--port', str(port),
-         '--stream-id', stream_id,
-         '--output-dir', output_dir,
-         # So the worker self-exits if we die without cleaning up (hard kill).
-         '--manager-pid', str(os.getpid())],
-        cwd=HERE,
-    )
+    common = ['--port', str(port),
+              '--stream-id', stream_id,
+              '--output-dir', output_dir,
+              # So the worker self-exits if we die without cleaning up (hard kill).
+              '--manager-pid', str(os.getpid())]
+    if getattr(sys, 'frozen', False):
+        # Packaged as an .exe: re-invoke ourselves in the worker role (there is
+        # no python + single_engine.py to call). sys.executable is the exe.
+        cmd = [sys.executable, '--role', 'worker'] + common
+        run_cwd = os.path.dirname(sys.executable)
+    else:
+        # Source mode: sys.executable = the (venv) Python running the manager.
+        cmd = [sys.executable, SINGLE_ENGINE] + common
+        run_cwd = HERE
+    proc = subprocess.Popen(cmd, cwd=run_cwd)
     if not _wait_healthy(port):
         try:
             proc.terminate()

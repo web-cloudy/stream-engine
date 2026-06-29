@@ -80,15 +80,23 @@ VIEWER_TTL = 30
 
 
 def _find_ffmpeg():
-    """Locate an ffmpeg executable (bundled ./ffmpeg, alongside app, config, PATH)."""
-    here = os.path.dirname(os.path.abspath(__file__))
+    """Locate ffmpeg: bundled next to the exe / in _MEIPASS (frozen), alongside
+    the source, the configured path, or PATH."""
     exe = 'ffmpeg.exe' if os.name == 'nt' else 'ffmpeg'
-    candidates = [
-        os.path.join(here, 'ffmpeg', exe),
-        os.path.join(here, 'ffmpeg', 'bin', exe),
-        os.path.join(here, exe),
-        getattr(Config, 'FFMPEG_PATH', None),
-    ]
+    bases = []
+    if getattr(sys, 'frozen', False):
+        meipass = getattr(sys, '_MEIPASS', '')
+        if meipass:
+            bases.append(meipass)
+        bases.append(os.path.dirname(sys.executable))
+    bases.append(os.path.dirname(os.path.abspath(__file__)))
+
+    candidates = []
+    for b in bases:
+        candidates += [os.path.join(b, 'ffmpeg', exe),
+                       os.path.join(b, 'ffmpeg', 'bin', exe),
+                       os.path.join(b, exe)]
+    candidates.append(getattr(Config, 'FFMPEG_PATH', None))
     for c in candidates:
         if c and os.path.isfile(c):
             return c

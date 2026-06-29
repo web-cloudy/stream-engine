@@ -7,3 +7,6 @@ requests==2.31.0
 # Production WSGI servers (optional)
 gunicorn==21.2.0   ; sys_platform != "win32"
 waitress==3.0.0    ; sys_platform == "win32"
+
+# Build tool (only needed to produce the standalone server .exe)
+pyinstaller>=6.3.0
